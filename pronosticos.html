@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Motor de Pronósticos Electorales</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Poppins', sans-serif; 
+            background: linear-gradient(135deg, #1e1e2e 0%, #1a1a3f 100%); 
+            color: #e0e0e0; 
+            min-height: 100vh; 
+            padding: 20px;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header {
+            text-align: center; margin-bottom: 40px;
+            background: rgba(80, 50, 130, 0.3);
+            padding: 30px; border-radius: 15px;
+            border-left: 5px solid #f59e0b;
+        }
+        .header h1 { font-size: 2.5em; margin-bottom: 10px; color: #fbbf24; }
+        .header p { font-size: 1.1em; color: #fed7aa; }
+        .btn-back { 
+            background: #f59e0b; 
+            color: white; 
+            padding: 10px 20px; 
+            border: none; 
+            border-radius: 5px; 
+            cursor: pointer; 
+            font-size: 1em; 
+            margin-bottom: 20px; 
+        }
+        .btn-back:hover { background: #d97706; }
+        .controls {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
+            gap: 15px; margin-bottom: 30px;
+        }
+        .form-group {
+            background: rgba(245, 158, 11, 0.15); 
+            padding: 15px; 
+            border-radius: 10px;
+        }
+        .form-group label { display: block; margin-bottom: 8px; font-weight: 600; color: #fbbf24; }
+        .form-group input { 
+            width: 100%; 
+            padding: 10px; 
+            border: none; 
+            border-radius: 5px; 
+            background: #1a1a3f; 
+            color: #e0e0e0; 
+        }
+        .btn-calcular { 
+            background: linear-gradient(135deg, #f59e0b, #f97316); 
+            color: white; 
+            padding: 15px 30px; 
+            border: none; 
+            border-radius: 5px; 
+            cursor: pointer; 
+            font-size: 1.1em; 
+            font-weight: 600;
+        }
+        .btn-calcular:hover { opacity: 0.9; }
+        .content { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .card {
+            background: rgba(50, 30, 100, 0.4); 
+            padding: 20px; 
+            border-radius: 10px; 
+            border: 1px solid #f59e0b;
+        }
+        .card h2 { margin-bottom: 15px; color: #fbbf24; }
+        .metric {
+            background: rgba(245, 158, 11, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            border-left: 4px solid #f59e0b;
+        }
+        .metric-label { font-size: 0.9em; color: #fed7aa; }
+        .metric-value { font-size: 1.8em; font-weight: 700; color: #fbbf24; }
+        table {
+            width: 100%; border-collapse: collapse; 
+            background: rgba(0, 0, 0, 0.3);
+        }
+        th, td {
+            padding: 12px; text-align: left; 
+            border-bottom: 1px solid #f59e0b;
+        }
+        th { background: rgba(245, 158, 11, 0.3); font-weight: 600; color: #fbbf24; }
+        tr:hover { background: rgba(245, 158, 11, 0.15); }
+        canvas { max-width: 100%; }
+        @media (max-width: 768px) { .content { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <button class="btn-back" onclick="window.location.href='index.html';">← Volver al Inicio</button>
+        <div class="header">
+            <h1>🔮 Motor de Pronósticos Electorales</h1>
+            <p>Análisis de tendencias y proyecciones con modelos predictivos avanzados</p>
+        </div>
+        
+        <div class="controls">
+            <div class="form-group">
+                <label>Semanas de Proyección:</label>
+                <input type="number" id="semanas" value="12" min="1" max="52">
+            </div>
+            <div class="form-group">
+                <label>Tendencia Candidato A (%):</label>
+                <input type="number" id="tendencia" value="2" min="-10" max="10" step="0.1">
+            </div>
+            <div class="form-group">
+                <label>Nivel de Confianza (%):</label>
+                <input type="number" id="confianza" value="95" min="50" max="99">
+            </div>
+            <div class="form-group">
+                <button class="btn-calcular" onclick="generarPronostico();">Generar Pronóstico</button>
+            </div>
+        </div>
+        
+        <div class="content">
+            <div class="card">
+                <h2>Proyección de Votos</h2>
+                <canvas id="pronosticoChart"></canvas>
+            </div>
+            <div class="card">
+                <h2>Métricas de Confianza</h2>
+                <div id="metricas"></div>
+            </div>
+        </div>
+        
+        <div class="card" style="margin-top: 20px;">
+            <h2>Pronóstico por Semana</h2>
+            <table id="tablaSemanas"></table>
+        </div>
+    </div>
+    
+    <script>
+        let pronosticoChart = null;
+        
+        function generarPronostico() {
+            const semanas = parseInt(document.getElementById('semanas').value);
+            const tendencia = parseFloat(document.getElementById('tendencia').value);
+            const confianza = parseFloat(document.getElementById('confianza').value);
+            
+            const datos = generarDatos(semanas, tendencia, confianza);
+            
+            mostrarGraficoPronostico(datos);
+            mostrarMetricas(datos, confianza);
+            mostrarTablaSemanas(datos);
+        }
+        
+        function generarDatos(semanas, tendencia, confianza) {
+            const datos = {
+                semanas: [],
+                votosA: [],
+                votosB: [],
+                margenError: [],
+                intervaloBajo: [],
+                intervaloAlto: []
+            };
+            
+            let votosActualesA = 48;
+            const volatilidad = (100 - confianza) / 10;
+            
+            for (let i = 0; i <= semanas; i++) {
+                const cambio = (tendencia / semanas) * i + (Math.random() - 0.5) * volatilidad;
+                const votosA = Math.max(30, Math.min(70, votosActualesA + cambio));
+                const votosB = 100 - votosA;
+                const error = (100 - confianza) / 10 + (Math.random() * 2);
+                
+                datos.semanas.push(i);
+                datos.votosA.push(votosA);
+                datos.votosB.push(votosB);
+                datos.margenError.push(error);
+                datos.intervaloBajo.push(Math.max(0, votosA - error));
+                datos.intervaloAlto.push(Math.min(100, votosA + error));
+                
+                votosActualesA = votosA;
+            }
+            
+            return datos;
+        }
+        
+        function mostrarGraficoPronostico(datos) {
+            const ctx = document.getElementById('pronosticoChart').getContext('2d');
+            
+            if (pronosticoChart) pronosticoChart.destroy();
+            
+            pronosticoChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: datos.semanas.map(s => 'Sem ' + s),
+                    datasets: [
+                        { 
+                            label: 'Candidato A (%)', 
+                            data: datos.votosA, 
+                            borderColor: '#f59e0b', 
+                            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                            borderWidth: 3,
+                            fill: false,
+                            tension: 0.3
+                        },
+                        { 
+                            label: 'Intervalo Superior', 
+                            data: datos.intervaloAlto, 
+                            borderColor: 'rgba(245, 158, 11, 0.3)', 
+                            borderWidth: 1,
+                            borderDash: [5, 5],
+                            fill: false
+                        },
+                        { 
+                            label: 'Intervalo Inferior', 
+                            data: datos.intervaloBajo, 
+                            borderColor: 'rgba(245, 158, 11, 0.3)', 
+                            borderWidth: 1,
+                            borderDash: [5, 5],
+                            fill: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { labels: { color: '#e0e0e0', font: { size: 12 } } } },
+                    scales: { 
+                        y: { 
+                            beginAtZero: true, 
+                            max: 100,
+                            ticks: { color: '#fbbf24' },
+                            grid: { color: 'rgba(245, 158, 11, 0.15)' }
+                        },
+                        x: { ticks: { color: '#fbbf24' }, grid: { color: 'rgba(245, 158, 11, 0.15)' } }
+                    }
+                }
+            });
+        }
+        
+        function mostrarMetricas(datos, confianza) {
+            const ultimoIndex = datos.votosA.length - 1;
+            const votosFinales = datos.votosA[ultimoIndex];
+            const margenFinal = votosFinales - datos.votosB[ultimoIndex];
+            const errorEstimado = (100 - confianza) / 10;
+            
+            const html = `
+                <div class="metric">
+                    <div class="metric-label">Voto Proyectado Candidato A</div>
+                    <div class="metric-value">${votosFinales.toFixed(1)}%</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Margen de Ventaja</div>
+                    <div class="metric-value">${margenFinal.toFixed(1)}%</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Error Estimado</div>
+                    <div class="metric-value">±${errorEstimado.toFixed(1)}%</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Nivel de Confianza</div>
+                    <div class="metric-value">${confianza}%</div>
+                </div>
+            `;
+            
+            document.getElementById('metricas').innerHTML = html;
+        }
+        
+        function mostrarTablaSemanas(datos) {
+            const tabla = document.getElementById('tablaSemanas');
+            let html = '<tr><th>Semana</th><th>Candidato A (%)</th><th>Candidato B (%)</th><th>Intervalo (±)</th><th>Proyección</th></tr>';
+            
+            for (let i = 0; i < datos.semanas.length; i += Math.ceil(datos.semanas.length / 8)) {
+                const margen = datos.votosA[i] - datos.votosB[i];
+                const proyeccion = margen > 2 ? '🟢 Favorable' : margen < -2 ? '🔴 Desfavorable' : '🟡 Competitivo';
+                
+                html += `<tr>
+                    <td>Semana ${datos.semanas[i]}</td>
+                    <td>${datos.votosA[i].toFixed(1)}%</td>
+                    <td>${datos.votosB[i].toFixed(1)}%</td>
+                    <td>±${datos.margenError[i].toFixed(1)}%</td>
+                    <td>${proyeccion}</td>
+                </tr>`;
+            }
+            
+            tabla.innerHTML = html;
+        }
+        
+        window.onload = generarPronostico;
+    </script>
+</body>
+</html>
